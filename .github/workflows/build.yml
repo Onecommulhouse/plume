@@ -149,7 +149,7 @@ jobs:
           fi
           ls -lh Plume.dmg
 
-      # Une seule soumission (le .dmg contient l'app). Si Apple met plus de 20 min, on publie quand même :
+      # Une seule soumission (le .dmg contient l'app). Si Apple met plus de 10 min, on publie quand même :
       # le fichier signé devient valide tout seul dès qu'Apple a terminé (vérification en ligne au premier lancement).
       - name: Notariser
         id: notary
@@ -159,7 +159,7 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || env.NOTARY_ISSUER_ID }}
         run: |
           set +e
-          ./scripts/notarize.sh Plume.dmg 20m
+          ./scripts/notarize.sh Plume.dmg 10m
           code=$?
           set -e
           case $code in

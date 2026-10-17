@@ -9,7 +9,8 @@ TIMEOUT="${2:-20m}"
 KEY="$RUNNER_TEMP/AuthKey.p8"
 AUTH=(--key "$KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
 
-RESULT=$(xcrun notarytool submit "$FILE" "${AUTH[@]}" --wait --timeout "$TIMEOUT" --output-format json)
+# 2>&1 : en cas de délai dépassé, notarytool écrit sa réponse sur la sortie d'erreur.
+RESULT=$(xcrun notarytool submit "$FILE" "${AUTH[@]}" --wait --timeout "$TIMEOUT" --output-format json 2>&1)
 echo "$RESULT"
 
 # Lecture tolérante de la réponse (notarytool peut ajouter du texte après le JSON).
