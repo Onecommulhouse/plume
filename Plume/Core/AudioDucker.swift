@@ -106,23 +106,23 @@ final class AudioDucker {
 
     private static func canSetVolume(_ device: AudioDeviceID) -> Bool {
         var address = volumeAddress()
-        guard AudioHardwareServiceHasProperty(device, &address) else { return false }
+        guard AudioObjectHasProperty(device, &address) else { return false }
         var settable: DarwinBoolean = false
-        return AudioHardwareServiceIsPropertySettable(device, &address, &settable) == noErr && settable.boolValue
+        return AudioObjectIsPropertySettable(device, &address, &settable) == noErr && settable.boolValue
     }
 
     private static func volume(_ device: AudioDeviceID) -> Float32? {
         var address = volumeAddress()
         var value = Float32(0)
         var size = UInt32(MemoryLayout<Float32>.size)
-        let status = AudioHardwareServiceGetPropertyData(device, &address, 0, nil, &size, &value)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &value)
         return status == noErr ? value : nil
     }
 
     private static func setVolume(_ device: AudioDeviceID, _ volume: Float32) {
         var address = volumeAddress()
         var value = max(0, min(1, volume))
-        _ = AudioHardwareServiceSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
+        _ = AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
     }
 
     private static func canSetMute(_ device: AudioDeviceID) -> Bool {
