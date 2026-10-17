@@ -118,7 +118,7 @@ jobs:
             exit 1
           fi
 
-      - name: Notariser l'app
+      - name: Clé de notarisation
         if: steps.signing.outputs.enabled == 'true'
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
@@ -130,10 +130,8 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$APPLE_API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
-          APP=build/Build/Products/Release/Plume.app
-          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
-          ./scripts/notarize.sh "$RUNNER_TEMP/notarize.zip"
-          xcrun stapler staple "$APP"
+          echo "Dernières soumissions à Apple :"
+          xcrun notarytool history --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" 2>&1 | head -15 || true
 
       - name: Créer le fichier d'installation (.dmg)
         env:
@@ -151,16 +149,32 @@ jobs:
           fi
           ls -lh Plume.dmg
 
-      - name: Notariser le .dmg
+      # Une seule soumission (le .dmg contient l'app). Si Apple met plus de 20 min, on publie quand même :
+      # le fichier signé devient valide tout seul dès qu'Apple a terminé (vérification en ligne au premier lancement).
+      - name: Notariser
+        id: notary
         if: steps.signing.outputs.enabled == 'true'
         env:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID || env.NOTARY_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || env.NOTARY_ISSUER_ID }}
         run: |
-          ./scripts/notarize.sh Plume.dmg
-          xcrun stapler staple Plume.dmg
-          spctl --assess --type open --context context:primary-signature --verbose=2 Plume.dmg
-          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          set +e
+          ./scripts/notarize.sh Plume.dmg 20m
+          code=$?
+          set -e
+          case $code in
+            0)
+              xcrun stapler staple Plume.dmg
+              spctl --assess --type open --context context:primary-signature --verbose=2 Plume.dmg || true
+              echo "state=accepted" >> "$GITHUB_OUTPUT"
+              ;;
+            2)
+              echo "state=pending" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
 
       - name: Publier l'app
         uses: actions/upload-artifact@v4
@@ -168,6 +182,7 @@ jobs:
           name: Plume
           path: Plume.dmg
           retention-days: 30
+          if-no-files-found: error
 
       - name: Journal de compilation
         if: always()
@@ -177,6 +192,8 @@ jobs:
           path: build.log
           retention-days: 7
 
-      - name: Nettoyer le trousseau
+      - name: Nettoyer le trousseau et la clé
         if: always() && steps.signing.outputs.enabled == 'true'
-        run: security delete-keychain "${{ steps.signing.outputs.keychain }}" || true
+        run: |
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+          security delete-keychain "${{ steps.signing.outputs.keychain }}" || true

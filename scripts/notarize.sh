@@ -1,27 +1,36 @@
 #!/bin/bash
-# Envoie un fichier à la notarisation Apple et affiche le rapport en cas de refus.
+# Envoie un fichier à la notarisation Apple.
+# Code de sortie : 0 = accepté, 2 = toujours en cours chez Apple (délai dépassé), 1 = refusé ou erreur.
 # Variables attendues : APPLE_API_KEY_ID, APPLE_API_ISSUER, et la clé dans $RUNNER_TEMP/AuthKey.p8.
-set -euo pipefail
+set -uo pipefail
 
 FILE="$1"
+TIMEOUT="${2:-20m}"
 KEY="$RUNNER_TEMP/AuthKey.p8"
+AUTH=(--key "$KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
 
-RESULT=$(xcrun notarytool submit "$FILE" \
-  --key "$KEY" \
-  --key-id "$APPLE_API_KEY_ID" \
-  --issuer "$APPLE_API_ISSUER" \
-  --wait --timeout 30m \
-  --output-format json)
+RESULT=$(xcrun notarytool submit "$FILE" "${AUTH[@]}" --wait --timeout "$TIMEOUT" --output-format json)
 echo "$RESULT"
 
-ID=$(printf '%s' "$RESULT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id", ""))')
-STATUS=$(printf '%s' "$RESULT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", ""))')
+field() { printf '%s' "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('$1', ''))" 2>/dev/null; }
+ID=$(field id)
+STATUS=$(field status)
+MESSAGE=$(field message)
 
-if [ "$STATUS" != "Accepted" ]; then
-  echo "::error::Notarisation refusée ($STATUS)."
-  if [ -n "$ID" ]; then
-    xcrun notarytool log "$ID" --key "$KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" || true
-  fi
-  exit 1
+[ -n "$ID" ] && echo "submission_id=$ID" >> "${GITHUB_OUTPUT:-/dev/null}"
+
+if [ "$STATUS" = "Accepted" ]; then
+  echo "Notarisation acceptée."
+  exit 0
 fi
-echo "Notarisation acceptée."
+
+if [ -z "$STATUS" ] && printf '%s' "$MESSAGE" | grep -qi "timeout"; then
+  echo "::warning::Apple n'a pas encore terminé la notarisation (soumission $ID). Le fichier deviendra valide dès qu'Apple aura fini."
+  exit 2
+fi
+
+echo "::error::Notarisation refusée (${STATUS:-erreur})."
+if [ -n "$ID" ]; then
+  xcrun notarytool log "$ID" "${AUTH[@]}" || true
+fi
+exit 1
