@@ -12,25 +12,31 @@ AUTH=(--key "$KEY" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER")
 RESULT=$(xcrun notarytool submit "$FILE" "${AUTH[@]}" --wait --timeout "$TIMEOUT" --output-format json)
 echo "$RESULT"
 
-field() { printf '%s' "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('$1', ''))" 2>/dev/null; }
+# Lecture tolérante de la réponse (notarytool peut ajouter du texte après le JSON).
+field() { printf '%s' "$RESULT" | grep -oE "\"$1\" *: *\"[^\"]*\"" | head -1 | sed -E 's/.*"([^"]*)"$/\1/'; }
 ID=$(field id)
 STATUS=$(field status)
-MESSAGE=$(field message)
 
 [ -n "$ID" ] && echo "submission_id=$ID" >> "${GITHUB_OUTPUT:-/dev/null}"
 
-if [ "$STATUS" = "Accepted" ]; then
-  echo "Notarisation acceptée."
-  exit 0
+if [ -z "$ID" ]; then
+  echo "::error::L'envoi à Apple a échoué (aucun numéro de soumission)."
+  exit 1
 fi
 
-if [ -z "$STATUS" ] && printf '%s' "$MESSAGE" | grep -qi "timeout"; then
-  echo "::warning::Apple n'a pas encore terminé la notarisation (soumission $ID). Le fichier deviendra valide dès qu'Apple aura fini."
-  exit 2
-fi
-
-echo "::error::Notarisation refusée (${STATUS:-erreur})."
-if [ -n "$ID" ]; then
-  xcrun notarytool log "$ID" "${AUTH[@]}" || true
-fi
-exit 1
+case "$STATUS" in
+  Accepted)
+    echo "Notarisation acceptée."
+    exit 0
+    ;;
+  Invalid|Rejected)
+    echo "::error::Notarisation refusée ($STATUS)."
+    xcrun notarytool log "$ID" "${AUTH[@]}" || true
+    exit 1
+    ;;
+  *)
+    # Délai dépassé ou « In Progress » : Apple n'a pas fini, ce n'est pas un refus.
+    echo "::warning::Apple n'a pas encore terminé la notarisation (soumission $ID). Le fichier deviendra valide dès qu'Apple aura fini."
+    exit 2
+    ;;
+esac
