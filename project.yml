@@ -19,6 +19,8 @@ settings:
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: NO
     DEAD_CODE_STRIPPING: YES
+    # Pas d'autorisation de débogage (get-task-allow) : Apple la refuse à la notarisation.
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
 
 packages:
   ArgmaxOSS:
