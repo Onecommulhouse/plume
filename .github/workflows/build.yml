@@ -11,8 +11,8 @@ concurrency:
 
 # Identifiants de la clé de notarisation App Store Connect (pas secrets : inutiles sans le fichier .p8).
 env:
-  NOTARY_KEY_ID: ""
-  NOTARY_ISSUER_ID: ""
+  NOTARY_KEY_ID: "3AM7C249ZD"
+  NOTARY_ISSUER_ID: "52265117-add4-407c-b7ff-9e2ada3a1e4d"
 
 jobs:
   build:
