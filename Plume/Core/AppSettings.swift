@@ -81,6 +81,7 @@ final class AppSettings: ObservableObject {
     @Published var cleanupEnabled: Bool { didSet { defaults.set(cleanupEnabled, forKey: "cleanupEnabled") } }
     @Published var soundsEnabled: Bool { didSet { defaults.set(soundsEnabled, forKey: "soundsEnabled") } }
     @Published var keepInClipboard: Bool { didSet { defaults.set(keepInClipboard, forKey: "keepInClipboard") } }
+    @Published var muteWhileDictating: Bool { didSet { defaults.set(muteWhileDictating, forKey: "muteWhileDictating") } }
     @Published var vocabulary: [String] { didSet { defaults.set(vocabulary, forKey: "vocabulary") } }
     @Published private(set) var hasAPIKey: Bool
     @Published private(set) var launchAtLogin: Bool
@@ -95,6 +96,7 @@ final class AppSettings: ObservableObject {
         cleanupEnabled = d.object(forKey: "cleanupEnabled") as? Bool ?? true
         soundsEnabled = d.object(forKey: "soundsEnabled") as? Bool ?? true
         keepInClipboard = d.object(forKey: "keepInClipboard") as? Bool ?? false
+        muteWhileDictating = d.object(forKey: "muteWhileDictating") as? Bool ?? true
         vocabulary = d.stringArray(forKey: "vocabulary") ?? PlumeConfig.defaultVocabulary
         hasAPIKey = !(Keychain.read(Keychain.anthropicAccount) ?? "").isEmpty
         launchAtLogin = SMAppService.mainApp.status == .enabled

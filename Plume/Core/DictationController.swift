@@ -42,6 +42,8 @@ final class DictationController: ObservableObject {
 
     private let recorder = AudioRecorder()
     private let hotkeys = HotkeyMonitor()
+    private let ducker = AudioDucker()
+    private var duckTask: Task<Void, Never>?
     private var overlay: OverlayController?
     private var recordStart: Date?
     private var targetApp: NSRunningApplication?
@@ -56,6 +58,7 @@ final class DictationController: ObservableObject {
         started = true
 
         overlay = OverlayController(controller: self)
+        AudioDucker.restorePendingIfNeeded()
 
         hotkeys.hotkey = settings.hotkey
         hotkeys.onPress = { [weak self] in
@@ -154,6 +157,28 @@ final class DictationController: ObservableObject {
         phase = .recording
         overlay?.show()
         if settings.soundsEnabled { NSSound(named: "Tink")?.play() }
+        if settings.muteWhileDictating {
+            // On laisse le petit son de départ se jouer avant de couper le reste.
+            let delay: UInt64 = settings.soundsEnabled ? 150_000_000 : 0
+            duckTask = Task { [weak self] in
+                if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
+                guard !Task.isCancelled, let self, self.phase == .recording else { return }
+                self.ducker.duck()
+            }
+        }
+    }
+
+    /// À la fermeture de l'app : on ne laisse jamais le Mac muet.
+    func prepareForQuit() {
+        if phase == .recording { _ = recorder.stop() }
+        restoreAudio()
+    }
+
+    /// Rend le son du Mac (appelé dès que la touche est relâchée ou la dictée annulée).
+    private func restoreAudio() {
+        duckTask?.cancel()
+        duckTask = nil
+        ducker.restore()
     }
 
     private func endRecording() {
@@ -161,6 +186,7 @@ final class DictationController: ObservableObject {
         let samples = recorder.stop()
         let duration = Date().timeIntervalSince(start)
         recordStart = nil
+        restoreAudio()
 
         // Appui trop court : on considère que c'était involontaire.
         guard duration >= 0.4, samples.count >= 8_000 else {
@@ -177,6 +203,7 @@ final class DictationController: ObservableObject {
         guard phase == .recording else { return }
         _ = recorder.stop()
         recordStart = nil
+        restoreAudio()
         phase = .idle
         overlay?.hide()
     }

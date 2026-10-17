@@ -11,7 +11,7 @@ Maintiens **Option droite**, parle, relâche : le texte s'écrit là où se trou
 
 ## Compilation
 
-L'app est compilée automatiquement par GitHub Actions (`.github/workflows/build.yml`) sur un Mac à chaque envoi sur `main`. Le fichier `Plume.zip` est disponible dans l'onglet *Actions*, rubrique *Artifacts*.
+L'app est compilée automatiquement par GitHub Actions (`.github/workflows/build.yml`) sur un Mac à chaque envoi sur `main`. Le fichier `Plume.dmg` est disponible dans l'onglet *Actions*, rubrique *Artifacts*.
 
 En local (Mac avec Xcode 26) :
 

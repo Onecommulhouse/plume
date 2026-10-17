@@ -57,6 +57,13 @@ struct SettingsView: View {
                         .tint(Theme.gold)
                 }
                 Divider().overlay(Theme.line)
+                SettingsRow(label: "Couper le son pendant la dictée", hint: "Musique, YouTube, vidéos… le son du Mac se coupe tant que tu maintiens la touche et revient dès que tu relâches. Ta voix est aussi mieux comprise.") {
+                    Toggle("", isOn: $settings.muteWhileDictating)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(Theme.gold)
+                }
+                Divider().overlay(Theme.line)
                 SettingsRow(label: "Garder le texte copié", hint: "Laisse la dernière dictée dans le presse-papier au lieu de remettre ce qu'il y avait avant.") {
                     Toggle("", isOn: $settings.keepInClipboard)
                         .labelsHidden()
