@@ -9,6 +9,11 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# Identifiants de la clé de notarisation App Store Connect (pas secrets : inutiles sans le fichier .p8).
+env:
+  NOTARY_KEY_ID: ""
+  NOTARY_ISSUER_ID: ""
+
 jobs:
   build:
     runs-on: macos-26
@@ -39,9 +44,8 @@ jobs:
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$APPLE_CERTIFICATE_BASE64" ] || [ -z "$APPLE_TEAM_ID" ]; then
+          if [ -z "$APPLE_CERTIFICATE_BASE64" ]; then
             echo "Pas de certificat Apple : version de test non signée."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -60,16 +64,23 @@ jobs:
             echo "::error::Le fichier .p12 ne contient pas de certificat « Developer ID Application »."
             exit 1
           fi
-          echo "Signature avec : $IDENTITY"
+          # Le Team ID figure entre parenthèses à la fin du nom du certificat.
+          TEAM_ID=$(printf '%s' "$IDENTITY" | sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p')
+          if [ -z "$TEAM_ID" ]; then
+            echo "::error::Impossible de lire le Team ID dans « $IDENTITY »."
+            exit 1
+          fi
+          echo "Signature avec : $IDENTITY (équipe $TEAM_ID)"
           {
             echo "enabled=true"
             echo "identity=$IDENTITY"
+            echo "team=$TEAM_ID"
             echo "keychain=$KEYCHAIN"
           } >> "$GITHUB_OUTPUT"
 
       - name: Compiler
         env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_TEAM_ID: ${{ steps.signing.outputs.team }}
           SIGNING: ${{ steps.signing.outputs.enabled }}
           IDENTITY: ${{ steps.signing.outputs.identity }}
           KEYCHAIN: ${{ steps.signing.outputs.keychain }}
@@ -105,9 +116,13 @@ jobs:
         if: steps.signing.outputs.enabled == 'true'
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID || env.NOTARY_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || env.NOTARY_ISSUER_ID }}
         run: |
+          if [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
+            echo "::error::Clé de notarisation incomplète (fichier .p8, ID de clé ou Issuer ID manquant)."
+            exit 1
+          fi
           printf '%s\n' "$APPLE_API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
           APP=build/Build/Products/Release/Plume.app
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
@@ -133,8 +148,8 @@ jobs:
       - name: Notariser le .dmg
         if: steps.signing.outputs.enabled == 'true'
         env:
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID || env.NOTARY_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || env.NOTARY_ISSUER_ID }}
         run: |
           ./scripts/notarize.sh Plume.dmg
           xcrun stapler staple Plume.dmg
