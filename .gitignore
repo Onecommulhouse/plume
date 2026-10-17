@@ -1,0 +1,8 @@
+# Généré par XcodeGen
+Plume.xcodeproj/
+Plume/Info.plist
+Plume/Plume.entitlements
+build/
+DerivedData/
+*.xcuserstate
+.DS_Store
