@@ -86,7 +86,8 @@ final class Transcriber: ObservableObject {
         }
     }
 
-    func transcribe(_ samples: [Float], language: String?, vocabulary: [String]) async throws -> String {
+    /// - Parameter preview: transcription rapide d'un extrait, pour le texte affiché en direct pendant la dictée.
+    func transcribe(_ samples: [Float], language: String?, vocabulary: [String], preview: Bool = false) async throws -> String {
         guard let pipe else { throw TranscriberError.notReady }
 
         var options = DecodingOptions(
@@ -98,6 +99,11 @@ final class Transcriber: ObservableObject {
             withoutTimestamps: true,
             chunkingStrategy: .vad
         )
+        if preview {
+            // Extrait court (≤ 20 s) : pas de découpage ni de nouvel essai, on privilégie la vitesse.
+            options.chunkingStrategy = nil
+            options.temperatureFallbackCount = 0
+        }
         if !vocabulary.isEmpty, let tokenizer = pipe.tokenizer {
             let prompt = " " + vocabulary.joined(separator: ", ") + "."
             options.promptTokens = tokenizer.encode(text: prompt)

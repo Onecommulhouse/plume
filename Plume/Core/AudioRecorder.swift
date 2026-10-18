@@ -47,6 +47,13 @@ final class AudioRecorder {
         try engine.start()
     }
 
+    /// Copie de ce qui a été enregistré jusqu'ici, sans arrêter (pour le texte en direct).
+    func snapshot() -> [Float] {
+        lock.lock()
+        defer { lock.unlock() }
+        return samples
+    }
+
     /// Arrête l'enregistrement et renvoie les échantillons 16 kHz.
     func stop() -> [Float] {
         engine.inputNode.removeTap(onBus: 0)

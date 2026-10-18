@@ -83,6 +83,8 @@ final class AppSettings: ObservableObject {
     @Published var keepInClipboard: Bool { didSet { defaults.set(keepInClipboard, forKey: "keepInClipboard") } }
     @Published var muteWhileDictating: Bool { didSet { defaults.set(muteWhileDictating, forKey: "muteWhileDictating") } }
     @Published var vocabulary: [String] { didSet { defaults.set(vocabulary, forKey: "vocabulary") } }
+    @Published var showLiveText: Bool { didSet { defaults.set(showLiveText, forKey: "showLiveText") } }
+    @Published var handsFreeEnabled: Bool { didSet { defaults.set(handsFreeEnabled, forKey: "handsFreeEnabled") } }
     @Published private(set) var hasAPIKey: Bool
     @Published private(set) var launchAtLogin: Bool
 
@@ -98,6 +100,8 @@ final class AppSettings: ObservableObject {
         keepInClipboard = d.object(forKey: "keepInClipboard") as? Bool ?? false
         muteWhileDictating = d.object(forKey: "muteWhileDictating") as? Bool ?? true
         vocabulary = d.stringArray(forKey: "vocabulary") ?? PlumeConfig.defaultVocabulary
+        showLiveText = d.object(forKey: "showLiveText") as? Bool ?? true
+        handsFreeEnabled = d.object(forKey: "handsFreeEnabled") as? Bool ?? true
         hasAPIKey = !(Keychain.read(Keychain.anthropicAccount) ?? "").isEmpty
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }

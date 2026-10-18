@@ -41,6 +41,20 @@ struct SettingsView: View {
                     .frame(width: 360)
                 }
                 Divider().overlay(Theme.line)
+                SettingsRow(label: "Mode mains libres", hint: "Appuie deux fois sur le raccourci : la dictée continue sans garder le doigt sur la touche. Un appui pour terminer, Échap pour annuler.") {
+                    Toggle("", isOn: $settings.handsFreeEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(Theme.gold)
+                }
+                Divider().overlay(Theme.line)
+                SettingsRow(label: "Voir le texte pendant la dictée", hint: "Ce que Plume entend s'affiche au-dessus de la pastille, mot après mot. Au relâchement, Plume met au propre et colle comme d'habitude.") {
+                    Toggle("", isOn: $settings.showLiveText)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(Theme.gold)
+                }
+                Divider().overlay(Theme.line)
                 SettingsRow(label: "Langue", hint: "La langue dans laquelle tu dictes le plus souvent.") {
                     Picker("", selection: $settings.language) {
                         ForEach(LanguageChoice.allCases) { choice in
@@ -200,7 +214,7 @@ struct SettingsView: View {
         case .fn:
             return "Dans Réglages Système > Clavier, règle « Appuyer sur 🌐 pour » sur « Ne rien faire »."
         default:
-            return "Maintiens la touche, parle, relâche. Une autre touche pendant le maintien annule."
+            return "Maintiens la touche, parle, relâche. Double appui pour les mains libres. Une autre touche pendant le maintien annule."
         }
     }
 

@@ -12,6 +12,8 @@ final class HotkeyMonitor {
     var onRelease: (() -> Void)?
     /// Une autre touche a été tapée pendant le maintien (ex. Option + lettre pour un caractère spécial).
     var onInterrupt: (() -> Void)?
+    /// Touche Échap, à tout moment (annule une dictée en mode mains libres).
+    var onEscape: (() -> Void)?
 
     private var monitors: [Any] = []
     private var isDown = false
@@ -29,13 +31,13 @@ final class HotkeyMonitor {
         }) {
             monitors.append(local)
         }
-        if let globalKeys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] _ in
-            self?.handleOtherKey()
+        if let globalKeys = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+            self?.handleKeyDown(event)
         }) {
             monitors.append(globalKeys)
         }
         if let localKeys = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
-            self?.handleOtherKey()
+            self?.handleKeyDown(event)
             return event
         }) {
             monitors.append(localKeys)
@@ -72,7 +74,12 @@ final class HotkeyMonitor {
         }
     }
 
-    private func handleOtherKey() {
+    private func handleKeyDown(_ event: NSEvent) {
+        if event.keyCode == 53 { // Échap
+            isDown = false
+            onEscape?()
+            return
+        }
         guard isDown else { return }
         isDown = false
         onInterrupt?()

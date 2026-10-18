@@ -1,15 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// Petite pilule flottante en bas de l'écran pendant la dictée. Elle ne prend jamais le focus,
-/// pour que le texte arrive bien dans l'app où l'on écrit.
+/// Petite pilule flottante en bas de l'écran pendant la dictée, avec au-dessus le texte entendu en direct.
+/// Elle ne prend jamais le focus, pour que le texte arrive bien dans l'app où l'on écrit.
 @MainActor
 final class OverlayController {
     private let panel: NSPanel
+    static let size = NSSize(width: 580, height: 200)
 
     init(controller: DictationController) {
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 64),
+            contentRect: NSRect(origin: .zero, size: Self.size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: true
@@ -46,12 +47,46 @@ struct OverlayView: View {
     @EnvironmentObject private var controller: DictationController
 
     var body: some View {
+        VStack(spacing: 10) {
+            if showsBubble {
+                LiveTextBubble(text: Self.tail(of: controller.liveText), dimmed: controller.phase != .recording)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            pill
+        }
+        .frame(width: OverlayController.size.width, height: OverlayController.size.height, alignment: .bottom)
+        .animation(.easeOut(duration: 0.18), value: showsBubble)
+    }
+
+    private var showsBubble: Bool {
+        guard !controller.liveText.isEmpty else { return false }
+        switch controller.phase {
+        case .recording, .transcribing, .cleaning: return true
+        default: return false
+        }
+    }
+
+    private var pill: some View {
         HStack(spacing: 12) {
             switch controller.phase {
             case .recording:
-                Circle().fill(Theme.mustard).frame(width: 8, height: 8)
+                if controller.isHandsFree {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.mustard)
+                } else {
+                    Circle().fill(Theme.mustard).frame(width: 8, height: 8)
+                }
                 LiveWave(levels: controller.levels)
-                    .frame(width: 120, height: 26)
+                    .frame(width: controller.isHandsFree ? 96 : 120, height: 26)
+                if controller.isHandsFree, let start = controller.recordingStartedAt {
+                    TimelineView(.periodic(from: start, by: 1)) { context in
+                        Text(Self.elapsed(from: start, to: context.date))
+                            .font(Theme.font(12, .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.paper)
+                    }
+                }
             case .transcribing, .cleaning:
                 ProgressView()
                     .controlSize(.small)
@@ -80,6 +115,50 @@ struct OverlayView: View {
         )
         .frame(width: 260, height: 64)
         .animation(.easeOut(duration: 0.12), value: controller.levels)
+    }
+
+    /// Garde la fin du texte (les derniers mots dits), pour que la bulle reste sur trois lignes.
+    static func tail(of text: String, limit: Int = 170) -> String {
+        guard text.count > limit else { return text }
+        let cut = text.suffix(limit)
+        if let space = cut.firstIndex(of: " ") {
+            return "… " + cut[cut.index(after: space)...]
+        }
+        return "… " + cut
+    }
+
+    static func elapsed(from start: Date, to now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// Bulle au-dessus de la pilule : ce que Plume entend, mot après mot.
+struct LiveTextBubble: View {
+    let text: String
+    let dimmed: Bool
+
+    var body: some View {
+        Text(text)
+            .font(Theme.font(14, .medium))
+            .foregroundStyle(Theme.paper.opacity(dimmed ? 0.7 : 1))
+            .lineSpacing(3)
+            .multilineTextAlignment(.center)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .frame(maxWidth: 540)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Theme.navy.opacity(0.94))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Theme.mustard.opacity(0.25), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
+            )
+            .animation(.easeOut(duration: 0.15), value: text)
     }
 }
 
