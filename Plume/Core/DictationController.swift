@@ -39,6 +39,10 @@ final class DictationController: ObservableObject {
     /// Mode mains libres (double appui) : la dictée continue sans garder la touche enfoncée.
     @Published private(set) var isHandsFree = false
     @Published private(set) var recordingStartedAt: Date?
+    /// Langue de traduction demandée pour la dictée en cours (Maj enfoncée), sinon nil.
+    @Published private(set) var translateTarget: TranslationLanguage?
+    /// Traduction en cours de préparation (après le relâchement), pour l'affichage.
+    @Published private(set) var activeTranslation: TranslationLanguage?
 
     let settings = AppSettings()
     let store = HistoryStore()
@@ -52,6 +56,7 @@ final class DictationController: ObservableObject {
     private var overlay: OverlayController?
     private var recordStart: Date?
     private var targetApp: NSRunningApplication?
+    private var windowTitle: String?
     private var cancellables = Set<AnyCancellable>()
     private var errorResetTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
@@ -77,8 +82,14 @@ final class DictationController: ObservableObject {
         AudioDucker.restorePendingIfNeeded()
 
         hotkeys.hotkey = settings.hotkey
-        hotkeys.onPress = { [weak self] in
-            Task { @MainActor in self?.hotkeyPressed() }
+        hotkeys.onPress = { [weak self] shift in
+            Task { @MainActor in self?.hotkeyPressed(shift: shift) }
+        }
+        hotkeys.onShift = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.phase == .recording, self.translateTarget == nil else { return }
+                self.translateTarget = self.settings.translationTarget
+            }
         }
         hotkeys.onRelease = { [weak self] in
             Task { @MainActor in self?.hotkeyReleased() }
@@ -151,7 +162,7 @@ final class DictationController: ObservableObject {
 
     // MARK: - Raccourci : maintien, ou double appui pour les mains libres
 
-    private func hotkeyPressed() {
+    private func hotkeyPressed(shift: Bool = false) {
         // En mains libres, un nouvel appui termine la dictée.
         if phase == .recording, isHandsFree {
             ignoreNextRelease = true
@@ -162,7 +173,7 @@ final class DictationController: ObservableObject {
             && (lastQuickTapEnd.map { Date().timeIntervalSince($0) < Self.doubleTapDelay } ?? false)
         lastQuickTapEnd = nil
         ignoreNextRelease = false
-        beginRecording(handsFree: isDoubleTap)
+        beginRecording(handsFree: isDoubleTap, translate: shift)
     }
 
     private func hotkeyReleased() {
@@ -177,7 +188,7 @@ final class DictationController: ObservableObject {
 
     // MARK: - Cycle de dictée
 
-    private func beginRecording(handsFree: Bool = false) {
+    private func beginRecording(handsFree: Bool = false, translate: Bool = false) {
         switch phase {
         case .idle, .error: break
         default: return
@@ -193,6 +204,9 @@ final class DictationController: ObservableObject {
         }
 
         targetApp = NSWorkspace.shared.frontmostApplication
+        windowTitle = settings.useWindowContext && settings.adaptTone
+            ? WindowContext.focusedWindowTitle(of: targetApp)
+            : nil
         do {
             try recorder.start()
         } catch {
@@ -203,6 +217,7 @@ final class DictationController: ObservableObject {
         recordStart = Date()
         recordingStartedAt = recordStart
         isHandsFree = handsFree
+        translateTarget = translate ? settings.translationTarget : nil
         levels = Array(repeating: 0, count: levels.count)
         phase = .recording
         overlay?.show()
@@ -243,6 +258,7 @@ final class DictationController: ObservableObject {
         guard phase == .recording, let start = recordStart else { return }
         let samples = recorder.stop()
         let duration = Date().timeIntervalSince(start)
+        let translation = translateTarget
         let pendingPreview = finishRecordingSession()
         restoreAudio()
 
@@ -259,7 +275,7 @@ final class DictationController: ObservableObject {
         Task {
             // Le texte en direct utilise le même modèle : on attend qu'il ait fini avant la transcription finale.
             await pendingPreview?.value
-            await process(samples: samples, duration: duration)
+            await process(samples: samples, duration: duration, translation: translation)
         }
     }
 
@@ -278,6 +294,7 @@ final class DictationController: ObservableObject {
         recordStart = nil
         recordingStartedAt = nil
         isHandsFree = false
+        translateTarget = nil
         handsFreeTimeout?.cancel()
         handsFreeTimeout = nil
         let preview = previewTask
@@ -319,8 +336,12 @@ final class DictationController: ObservableObject {
         }
     }
 
-    private func process(samples: [Float], duration: TimeInterval) async {
-        defer { liveText = "" }
+    private func process(samples: [Float], duration: TimeInterval, translation: TranslationLanguage?) async {
+        activeTranslation = translation
+        defer {
+            liveText = ""
+            activeTranslation = nil
+        }
         do {
             let raw = try await transcriber.transcribe(
                 samples,
@@ -336,20 +357,26 @@ final class DictationController: ObservableObject {
 
             var finalText = transcript
             var cleaned = false
-            if settings.cleanupEnabled, let key = settings.apiKey, !key.isEmpty {
+            let needsClaude = settings.cleanupEnabled || translation != nil
+            if needsClaude, let key = settings.apiKey, !key.isEmpty {
                 phase = .cleaning
+                let context = CleanupContext(
+                    vocabulary: settings.vocabulary,
+                    appName: targetApp?.localizedName,
+                    windowTitle: windowTitle,
+                    style: settings.adaptTone ? settings.style(forBundleID: targetApp?.bundleIdentifier) : .asIs,
+                    translateTo: translation
+                )
                 do {
-                    finalText = try await TextCleaner(apiKey: key).clean(
-                        transcript,
-                        vocabulary: settings.vocabulary,
-                        appName: targetApp?.localizedName
-                    )
+                    finalText = try await TextCleaner(apiKey: key).clean(transcript, context: context)
                     cleaned = true
                     lastCleanupError = nil
                 } catch {
                     // Sans réseau ou clé invalide : on colle la transcription brute plutôt que rien.
                     lastCleanupError = error.localizedDescription
                 }
+            } else if translation != nil {
+                lastCleanupError = "La traduction passe par Claude : ajoute ta clé dans les réglages."
             }
 
             overlay?.hide()

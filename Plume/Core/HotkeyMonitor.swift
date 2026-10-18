@@ -8,7 +8,10 @@ final class HotkeyMonitor {
         didSet { if hotkey != oldValue { isDown = false } }
     }
 
-    var onPress: (() -> Void)?
+    /// Le paramètre indique si Maj était déjà enfoncée (dictée à traduire).
+    var onPress: ((Bool) -> Void)?
+    /// Maj vient d'être enfoncée (pendant le maintien ou en mains libres : traduire cette dictée).
+    var onShift: (() -> Void)?
     var onRelease: (() -> Void)?
     /// Une autre touche a été tapée pendant le maintien (ex. Option + lettre pour un caractère spécial).
     var onInterrupt: (() -> Void)?
@@ -55,6 +58,12 @@ final class HotkeyMonitor {
     private func handleFlags(_ event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
+        // Maj (gauche 56, droite 60) ne coupe jamais la dictée : elle demande la traduction.
+        if event.keyCode == 56 || event.keyCode == 60 {
+            if flags.contains(.shift) { onShift?() }
+            return
+        }
+
         guard event.keyCode == hotkey.keyCode else {
             // Un autre modificateur ajouté pendant le maintien : on annule.
             if isDown {
@@ -67,7 +76,7 @@ final class HotkeyMonitor {
         let pressed = flags.contains(hotkey.flag)
         if pressed && !isDown {
             isDown = true
-            onPress?()
+            onPress?(flags.contains(.shift))
         } else if !pressed && isDown {
             isDown = false
             onRelease?()

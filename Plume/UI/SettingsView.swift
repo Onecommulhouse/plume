@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var permissions: PermissionsManager
     @EnvironmentObject private var transcriber: Transcriber
+    @EnvironmentObject private var store: HistoryStore
     @ObservedObject private var updates = UpdateManager.shared
 
     @State private var keyDraft = ""
@@ -95,6 +96,32 @@ struct SettingsView: View {
                         .tint(Theme.gold)
                 }
                 Divider().overlay(Theme.line)
+                SettingsRow(label: "Adapter le ton à l'app", hint: "Plus soigné dans Mail, plus naturel dans WhatsApp ou Slack. Le tutoiement ou le vouvoiement que tu choisis est toujours gardé.") {
+                    Toggle("", isOn: $settings.adaptTone)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(Theme.gold)
+                }
+                if settings.adaptTone {
+                    Divider().overlay(Theme.line)
+                    SettingsRow(label: "Tenir compte de la fenêtre ouverte", hint: "Le titre de la fenêtre (objet du mail, nom de la conversation) aide Claude à deviner à qui tu écris. Il part avec le texte et n'est jamais enregistré.") {
+                        Toggle("", isOn: $settings.useWindowContext)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .tint(Theme.gold)
+                    }
+                }
+                Divider().overlay(Theme.line)
+                SettingsRow(label: "Traduction directe", hint: "Maintiens \(settings.hotkey.label) + Maj et parle en français : le texte est collé dans cette langue. En mains libres, appuie sur Maj pendant la dictée.") {
+                    Picker("", selection: $settings.translationTarget) {
+                        ForEach(TranslationLanguage.allCases) { language in
+                            Text(language.label).tag(language)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 180)
+                }
+                Divider().overlay(Theme.line)
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Clé API Anthropic")
@@ -133,6 +160,35 @@ struct SettingsView: View {
                         Text("Dernière erreur : \(error)")
                             .font(Theme.font(12))
                             .foregroundStyle(Theme.muted)
+                    }
+                }
+            }
+
+            if settings.adaptTone {
+                SettingsCard(title: "Ton selon l'app") {
+                    let apps = store.usedApps(top: 8)
+                    if apps.isEmpty {
+                        Text("Les apps où tu dictes apparaîtront ici. Par défaut : soigné dans Mail et Outlook, détendu dans WhatsApp, Messages et Slack, automatique ailleurs.")
+                            .font(Theme.font(13))
+                            .foregroundStyle(Theme.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(Array(apps.enumerated()), id: \.element.id) { index, app in
+                            if index > 0 { Divider().overlay(Theme.line) }
+                            let style = settings.style(forBundleID: app.bundleID)
+                            SettingsRow(label: app.name, hint: style.hint) {
+                                Picker("", selection: Binding(
+                                    get: { settings.style(forBundleID: app.bundleID) },
+                                    set: { settings.setStyle($0, forBundleID: app.bundleID) }
+                                )) {
+                                    ForEach(WritingStyle.allCases) { option in
+                                        Text(option.label).tag(option)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 180)
+                            }
+                        }
                     }
                 }
             }

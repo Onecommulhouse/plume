@@ -150,6 +150,27 @@ final class HistoryStore: ObservableObject {
         var id: String { name }
     }
 
+    struct UsedApp: Identifiable {
+        let bundleID: String
+        let name: String
+        var id: String { bundleID }
+    }
+
+    /// Les apps où l'on dicte le plus, pour régler le ton app par app.
+    func usedApps(top: Int = 10) -> [UsedApp] {
+        var counts: [String: Int] = [:]
+        var names: [String: String] = [:]
+        for item in items {
+            guard let id = item.appBundleID, !id.isEmpty else { continue }
+            counts[id, default: 0] += 1
+            if names[id] == nil { names[id] = item.appName ?? id }
+        }
+        return counts
+            .sorted { $0.value > $1.value }
+            .prefix(top)
+            .map { UsedApp(bundleID: $0.key, name: names[$0.key] ?? $0.key) }
+    }
+
     func appShares(top: Int = 5) -> [AppShare] {
         let total = Double(totalWords)
         guard total > 0 else { return [] }

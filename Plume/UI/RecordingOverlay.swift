@@ -79,6 +79,14 @@ struct OverlayView: View {
                 }
                 LiveWave(levels: controller.levels)
                     .frame(width: controller.isHandsFree ? 96 : 120, height: 26)
+                if let target = controller.translateTarget {
+                    Text(target.badge)
+                        .font(Theme.font(10, .bold))
+                        .foregroundStyle(Theme.navy)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.mustard))
+                }
                 if controller.isHandsFree, let start = controller.recordingStartedAt {
                     TimelineView(.periodic(from: start, by: 1)) { context in
                         Text(Self.elapsed(from: start, to: context.date))
@@ -91,7 +99,7 @@ struct OverlayView: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(Theme.mustard)
-                Text(controller.phase == .cleaning ? "Mise au propre…" : "Plume écrit…")
+                Text(processingLabel)
                     .font(Theme.font(13, .semibold))
                     .foregroundStyle(Theme.paper)
             case .error(let message):
@@ -115,6 +123,14 @@ struct OverlayView: View {
         )
         .frame(width: 260, height: 64)
         .animation(.easeOut(duration: 0.12), value: controller.levels)
+    }
+
+    private var processingLabel: String {
+        guard controller.phase == .cleaning else { return "Plume écrit…" }
+        if let language = controller.activeTranslation {
+            return "Traduction en \(language.promptName)…"
+        }
+        return "Mise au propre…"
     }
 
     /// Garde la fin du texte (les derniers mots dits), pour que la bulle reste sur trois lignes.
