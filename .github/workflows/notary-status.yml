@@ -1,6 +1,7 @@
 name: Vérifier la notarisation
 
-# Lancement à la main : affiche où en sont les soumissions envoyées à Apple, sans recompiler.
+# Lancement à la main (bouton « Run workflow ») : montre où en sont les envois à Apple, sans recompiler.
+# Le résultat s'affiche en tableau sur la page du lancement (rubrique « Summary »).
 on:
   workflow_dispatch:
 
@@ -21,4 +22,43 @@ jobs:
         run: |
           trap 'rm -f "$RUNNER_TEMP/AuthKey.p8"' EXIT
           printf '%s\n' "$APPLE_API_KEY" > "$RUNNER_TEMP/AuthKey.p8"
-          xcrun notarytool history --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
+          xcrun notarytool history --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" \
+            --output-format json > "$RUNNER_TEMP/history.json"
+          python3 - "$RUNNER_TEMP/history.json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          from datetime import datetime, timezone
+          try:
+              from zoneinfo import ZoneInfo
+              tz, tzname = ZoneInfo("Europe/Paris"), "heure de Paris"
+          except Exception:
+              tz, tzname = timezone.utc, "UTC"
+
+          labels = {
+              "Accepted": "✅ Validé par Apple",
+              "In Progress": "⏳ En cours chez Apple",
+              "Invalid": "❌ Refusé",
+              "Rejected": "❌ Refusé",
+          }
+          items = json.load(open(sys.argv[1])).get("history", [])
+          now = datetime.now(timezone.utc)
+
+          print("## Envois à Apple (notarisation)\n")
+          if not items:
+              print("Aucun envoi trouvé.")
+              sys.exit(0)
+          print(f"| Envoyé le ({tzname}) | Fichier | État | Depuis |")
+          print("|---|---|---|---|")
+          for it in items:
+              sent = datetime.fromisoformat(it["createdDate"].replace("Z", "+00:00"))
+              hours = int((now - sent).total_seconds() // 3600)
+              since = f"{hours // 24} j {hours % 24} h" if hours >= 24 else f"{hours} h"
+              status = labels.get(it.get("status", ""), it.get("status", ""))
+              print(f"| {sent.astimezone(tz):%d/%m %H:%M} | {it.get('name', '')} | {status} | {since} |")
+
+          pending = sum(1 for it in items if it.get("status") == "In Progress")
+          if any(it.get("status") == "Accepted" for it in items):
+              print("\n**Apple a validé au moins un envoi : Plume s'ouvre désormais sans alerte.**")
+          elif pending:
+              print(f"\n{pending} envoi(s) encore en attente chez Apple. Ce n'est pas un refus : il n'y a rien à faire de notre côté.")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
