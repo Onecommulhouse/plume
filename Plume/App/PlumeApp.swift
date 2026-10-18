@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Fonts.registerBundledFonts()
         Task { @MainActor in
             DictationController.shared.start()
+            UpdateManager.shared.start()
         }
     }
 
@@ -54,6 +55,7 @@ struct MenuBarContent: View {
     @EnvironmentObject private var controller: DictationController
     @EnvironmentObject private var store: HistoryStore
     @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var updates = UpdateManager.shared
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -71,6 +73,11 @@ struct MenuBarContent: View {
             }
         }
         .disabled(store.items.isEmpty)
+        Divider()
+        Button("Rechercher les mises à jour…") {
+            updates.checkForUpdates()
+        }
+        .disabled(!updates.canCheckForUpdates)
         Divider()
         Button("Quitter Plume") {
             NSApp.terminate(nil)

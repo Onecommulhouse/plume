@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: YES
@@ -26,6 +26,9 @@ packages:
   ArgmaxOSS:
     url: https://github.com/argmaxinc/argmax-oss-swift
     from: 1.1.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
 
 targets:
   Plume:
@@ -36,6 +39,8 @@ targets:
     dependencies:
       - package: ArgmaxOSS
         product: WhisperKit
+      - package: Sparkle
+        product: Sparkle
     info:
       path: Plume/Info.plist
       properties:
@@ -47,6 +52,13 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHumanReadableCopyright: "© 2026 ONE COM"
         NSMicrophoneUsageDescription: "Plume écoute ta voix uniquement pendant que tu maintiens le raccourci, pour la transformer en texte sur ton Mac."
+        # Mises à jour automatiques (Sparkle) : liste des versions publiée à chaque compilation sur GitHub.
+        SUFeedURL: "https://github.com/Onecommulhouse/plume/releases/latest/download/appcast.xml"
+        # Clé publique : seules les mises à jour signées avec la clé privée (secret SPARKLE_PRIVATE_KEY) sont acceptées.
+        SUPublicEDKey: "ESaY2/JjjFi6PO5MQhm4txxBKngZRHLAaYxNHirPWW8="
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: true
+        SUScheduledCheckInterval: 3600
     entitlements:
       path: Plume/Plume.entitlements
       properties:

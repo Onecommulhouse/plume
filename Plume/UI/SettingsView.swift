@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var permissions: PermissionsManager
     @EnvironmentObject private var transcriber: Transcriber
+    @ObservedObject private var updates = UpdateManager.shared
 
     @State private var keyDraft = ""
     @State private var keyStatus: KeyStatus = .idle
@@ -134,6 +135,29 @@ struct SettingsView: View {
                     granted: permissions.accessibility,
                     action: { permissions.requestAccessibility() }
                 )
+                if !permissions.accessibility {
+                    Text("Déjà activée dans Réglages Système mais Plume dit non ? Quitte Plume, retire la ligne Plume de la liste Accessibilité avec le bouton −, rouvre Plume puis clique sur Autoriser.")
+                        .font(Theme.font(12))
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            SettingsCard(title: "Mises à jour") {
+                SettingsRow(label: "Mettre à jour automatiquement", hint: "Plume vérifie toutes les heures, télécharge la nouvelle version et se relance toute seule dès qu'aucune dictée n'est en cours. Rien à réinstaller.") {
+                    Toggle("", isOn: $updates.automaticUpdates)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(Theme.gold)
+                }
+                Divider().overlay(Theme.line)
+                SettingsRow(label: "Version installée", hint: "Plume \(updates.versionLabel)") {
+                    Button("Rechercher maintenant") {
+                        updates.checkForUpdates()
+                    }
+                    .buttonStyle(PillButtonStyle(prominent: false))
+                    .disabled(!updates.canCheckForUpdates)
+                }
             }
 
             SettingsCard(title: "Général") {
@@ -158,7 +182,7 @@ struct SettingsView: View {
                 Text("Plume \(appVersion) · un outil one com")
                     .font(Theme.font(12, .semibold))
                     .foregroundStyle(Theme.muted)
-                Text("Transcription locale : WhisperKit d'Argmax (licence MIT). Collage selon la disposition du clavier adapté d'OpenWhispr (licence MIT). Police Montserrat (licence OFL).")
+                Text("Transcription locale : WhisperKit d'Argmax (licence MIT). Collage selon la disposition du clavier adapté d'OpenWhispr (licence MIT). Mises à jour : Sparkle (licence MIT). Police Montserrat (licence OFL).")
                     .font(Theme.font(11))
                     .foregroundStyle(Theme.soft)
                     .fixedSize(horizontal: false, vertical: true)
